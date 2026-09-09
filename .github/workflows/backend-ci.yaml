@@ -1,0 +1,73 @@
+name: Backend Continuous Integration
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'starter/backend/**'
+      - '.github/workflows/backend-ci.yaml'
+  workflow_dispatch:
+
+jobs:
+  lint:
+    name: Backend Linting
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install Pipenv and Dependencies
+        working-directory: starter/backend
+        run: |
+          pip install --upgrade pip pipenv
+          pipenv install --dev
+
+      - name: Execute Flake8 Linting Check
+        working-directory: starter/backend
+        run: |
+          pipenv run lint
+
+  test:
+    name: Backend PyTest Suite
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install Pipenv and Dependencies
+        working-directory: starter/backend
+        run: |
+          pip install --upgrade pip pipenv
+          pipenv install --dev
+
+      - name: Run PyTest Suite
+        working-directory: starter/backend
+        run: |
+          pipenv run test
+
+  build:
+    name: Backend Docker Build
+    needs: [lint, test]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Backend Docker Image
+        working-directory: starter/backend
+        run: |
+          docker build --tag mp-backend:latest .

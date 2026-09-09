@@ -1,0 +1,21 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+flask = "~=2.2.2"
+flask-cors = "~=3.0.10"
+
+[dev-packages]
+pytest = "~=7.2.1"
+flake8 = "~=6.0.0"
+
+[requires]
+python_version = "3.10"
+
+[scripts]
+serve = "python -m movies"
+test = "pytest"
+lint = "flake8"
+lint-fail = "flake8 --max-line-length=88"

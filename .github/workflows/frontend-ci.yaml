@@ -1,0 +1,80 @@
+name: Frontend Continuous Integration
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'starter/frontend/**'
+      - '.github/workflows/frontend-ci.yaml'
+  workflow_dispatch:
+
+env:
+  REACT_APP_MOVIE_API_URL: "http://localhost:5000"
+
+jobs:
+  lint:
+    name: Frontend Linting
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js Environment
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: starter/frontend/package.json
+
+      - name: Install Frontend Dependencies
+        working-directory: starter/frontend
+        run: |
+          npm ci || npm install
+
+      - name: Execute ESLint Rules Check
+        working-directory: starter/frontend
+        run: |
+          npm run lint
+
+  test:
+    name: Frontend Unit Testing
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js Environment
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: starter/frontend/package.json
+
+      - name: Install Frontend Dependencies
+        working-directory: starter/frontend
+        run: |
+          npm ci || npm install
+
+      - name: Run Test Suite
+        working-directory: starter/frontend
+        run: |
+          CI=true npm test
+
+  build:
+    name: Frontend Docker Build
+    needs: [lint, test]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Frontend Docker Image
+        working-directory: starter/frontend
+        run: |
+          docker build \
+            --build-arg REACT_APP_MOVIE_API_URL=${{ env.REACT_APP_MOVIE_API_URL }} \
+            --tag mp-frontend:latest .
