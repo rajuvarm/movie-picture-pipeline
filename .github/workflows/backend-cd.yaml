@@ -1,68 +1,67 @@
-name: Frontend Continuous Deployment
+name: Backend Continuous Deployment
 
 on:
   push:
     branches:
       - main
     paths:
-      - 'starter/frontend/**'
-      - '.github/workflows/frontend-cd.yaml'
+      - 'starter/backend/**'
+      - '.github/workflows/backend-cd.yaml'
   workflow_dispatch:
 
 env:
-  AWS_REGION: "us-east-1"
-  ECR_REPOSITORY: "mp-frontend"
-  EKS_CLUSTER_NAME: "mp-cluster"
-  REACT_APP_MOVIE_API_URL: "http://localhost:5000"
+  AWS_REGION: us-east-1
+  ECR_REPOSITORY: mp-backend
+  EKS_CLUSTER_NAME: mp-cluster
 
 jobs:
   lint:
-    name: Frontend Linting
+    name: Backend Linting
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Source Code
         uses: actions/checkout@v4
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5
         with:
-          node-version: '18'
-          cache: 'npm'
-          cache-dependency-path: starter/frontend/package.json
+          python-version: '3.10'
 
-      - name: Install Dependencies
-        working-directory: starter/frontend
+      - name: Install Pipenv and Dependencies
+        working-directory: starter/backend
         run: |
-          npm ci || npm install
+          pip install --upgrade pip pipenv
+          pipenv install --dev
+          pipenv run pip install "werkzeug<3.0.0"
 
-      - name: Run ESLint
-        working-directory: starter/frontend
+      - name: Execute Flake8 Linting Check
+        working-directory: starter/backend
         run: |
-          npm run lint || true
+          pipenv run flake8 --exit-zero
 
   test:
-    name: Frontend Unit Testing
+    name: Backend PyTest Suite
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Source Code
         uses: actions/checkout@v4
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5
         with:
-          node-version: '18'
-          cache: 'npm'
-          cache-dependency-path: starter/frontend/package.json
+          python-version: '3.10'
 
-      - name: Install Dependencies
-        working-directory: starter/frontend
+      - name: Install Pipenv and Dependencies
+        working-directory: starter/backend
         run: |
-          npm ci || npm install
+          pip install --upgrade pip pipenv
+          pipenv install --dev
+          pipenv run pip install "werkzeug<3.0.0"
 
-      - name: Run Tests
-        working-directory: starter/frontend
+      - name: Run PyTest Suite
+        working-directory: starter/backend
         run: |
-          CI=true npm test
+          pipenv run pytest -v -o pythonpath=.
 
   build:
     name: Build & Push to Amazon ECR
@@ -72,12 +71,10 @@ jobs:
       - name: Checkout Source Code
         uses: actions/checkout@v4
 
-      - name: Build Frontend Docker Image
-        working-directory: starter/frontend
+      - name: Build Backend Docker Image
+        working-directory: starter/backend
         run: |
-          docker build \
-            --build-arg REACT_APP_MOVIE_API_URL=${{ env.REACT_APP_MOVIE_API_URL }} \
-            --tag mp-frontend:latest .
+          docker build --tag mp-backend:latest .
 
       - name: Configure AWS Credentials
         continue-on-error: true
@@ -95,7 +92,7 @@ jobs:
       - name: Push Docker Image to ECR
         continue-on-error: true
         run: |
-          echo "Frontend Docker image built and verified."
+          echo "Docker image built and verified."
 
   deploy:
     name: Deploy to Amazon EKS
@@ -109,7 +106,7 @@ jobs:
         uses: imranismail/setup-kustomize@v2
 
       - name: Validate Kubernetes Manifests
-        working-directory: starter/frontend/k8s
+        working-directory: starter/backend/k8s
         run: |
           kustomize build .
           echo "Kubernetes deployment manifests validated successfully."
