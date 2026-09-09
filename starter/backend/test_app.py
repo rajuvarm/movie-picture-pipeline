@@ -1,11 +1,10 @@
 import os
-import pytest
 from movies import app
 
 
 def test_movies_endpoint_returns_200():
     with app.test_client() as client:
-        status_code = os.getenv("FAIL_TEST", 200)
+        status_code = int(os.getenv("FAIL_TEST", "200"))
         response = client.get("/movies/")
         assert response.status_code == status_code
 
@@ -24,7 +23,7 @@ def test_movies_endpoint_returns_valid_data():
         assert len(data["movies"]) == 3
         assert data["movies"][0]["id"] == "123"
         assert data["movies"][0]["title"] == "Top Gun: Maverick"
-        assert data["movies"][1]["id"] == "456"
-        assert data["movies"][1]["title"] == "Sonic the Hedgehog"
-        assert data["movies"][2]["id"] == "789"
-        assert data["movies"][2]["title"] == "A Quiet Place"
+        assert data["movies"]["id"] == "456"
+        assert data["movies"]["title"] == "Sonic the Hedgehog"
+        assert data["movies"]["id"] == "789"
+        assert data["movies"]["title"] == "A Quiet Place"
