@@ -4,7 +4,7 @@ from movies import app
 
 def test_movies_endpoint_returns_200():
     with app.test_client() as client:
-        status_code = int(os.getenv("FAIL_TEST", "200"))
+        status_code = int(os.getenv("FAIL_TEST", 200))
         response = client.get("/movies/")
         assert response.status_code == status_code
 
