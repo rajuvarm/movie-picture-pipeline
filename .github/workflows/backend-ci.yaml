@@ -56,7 +56,7 @@ jobs:
       - name: Run PyTest Suite
         working-directory: starter/backend
         run: |
-          pipenv run pytest -o pythonpath=.
+          PYTHONPATH=. pipenv run pytest
 
   build:
     name: Backend Docker Build
