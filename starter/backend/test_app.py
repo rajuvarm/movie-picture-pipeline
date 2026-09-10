@@ -13,6 +13,8 @@ def test_movies_endpoint_returns_json():
     with app.test_client() as client:
         response = client.get("/movies/")
         assert response.is_json
+
+
 def test_movies_endpoint_returns_valid_data():
     with app.test_client() as client:
         response = client.get("/movies/")

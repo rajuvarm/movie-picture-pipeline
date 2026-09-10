@@ -13,7 +13,8 @@ MOVIES_DATABASE = [
         'title': 'A Quiet Place'
     }
 ]
-# Function to retrieve full list of movie catalog items maintained in memory for the movie picture application tasks.
 
+
+# Function to retrieve full list of movie catalog items maintained in memory for the movie picture application tasks.
 def get_all_movies():
     return MOVIES_DATABASE
