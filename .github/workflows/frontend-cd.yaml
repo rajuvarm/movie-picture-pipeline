@@ -10,15 +10,16 @@ on:
   workflow_dispatch:
 
 env:
-  AWS_REGION: us-east-1
-  ECR_REPOSITORY: mp-frontend
-  EKS_CLUSTER_NAME: mp-cluster
+  AWS_REGION: "us-east-1"
+  ECR_REPOSITORY: "mp-frontend"
+  EKS_CLUSTER_NAME: "mp-cluster"
   REACT_APP_MOVIE_API_URL: "http://localhost:5000"
 
 jobs:
   lint:
     name: Frontend Linting
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout Source Code
         uses: actions/checkout@v4
@@ -38,11 +39,12 @@ jobs:
       - name: Run ESLint
         working-directory: starter/frontend
         run: |
-          npm run lint || true
+          npm run lint
 
   test:
     name: Frontend Unit Testing
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout Source Code
         uses: actions/checkout@v4
@@ -68,41 +70,105 @@ jobs:
     name: Build & Push to Amazon ECR
     needs: [lint, test]
     runs-on: ubuntu-latest
+
+    outputs:
+      image_tag: ${{ steps.set-tag.outputs.image_tag }}
+      ecr_registry: ${{ steps.login-ecr.outputs.registry }}
+
     steps:
       - name: Checkout Source Code
         uses: actions/checkout@v4
 
-      - name: Build Frontend Docker Image
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Log in to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set Image Tag from Git SHA
+        id: set-tag
+        run: |
+          echo "image_tag=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+
+      - name: Build, Tag, and Push Docker Image
         working-directory: starter/frontend
         run: |
+          REGISTRY="${{ steps.login-ecr.outputs.registry }}"
+          TAG="${{ steps.set-tag.outputs.image_tag }}"
+
           docker build \
-            --build-arg REACT_APP_MOVIE_API_URL=${{ env.REACT_APP_MOVIE_API_URL }} \
-            --tag mp-frontend:latest .
+            --build-arg REACT_APP_MOVIE_API_URL="${{ env.REACT_APP_MOVIE_API_URL }}" \
+            --tag "$REGISTRY/$ECR_REPOSITORY:$TAG" \
+            --tag "$REGISTRY/$ECR_REPOSITORY:latest" .
 
-      - name: Configure AWS Credentials & ECR
-        run: |
-          echo "Configuring AWS credentials for region ${{ env.AWS_REGION }}"
-          echo "Logging into Amazon ECR repository: ${{ env.ECR_REPOSITORY }}"
-          echo "AWS ECR authentication verified successfully."
-
-      - name: Push Docker Image to ECR
-        run: |
-          echo "Pushing image to ECR: ${{ env.ECR_REPOSITORY }}:latest"
-          echo "Successfully pushed to Amazon ECR."
+          docker push "$REGISTRY/$ECR_REPOSITORY:$TAG"
+          docker push "$REGISTRY/$ECR_REPOSITORY:latest"
 
   deploy:
     name: Deploy to Amazon EKS
     needs: [build]
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout Source Code
         uses: actions/checkout@v4
 
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Update Kubeconfig
+        run: |
+          aws eks update-kubeconfig \
+            --name "${{ env.EKS_CLUSTER_NAME }}" \
+            --region "${{ env.AWS_REGION }}"
+
       - name: Set up Kustomize
         uses: imranismail/setup-kustomize@v2
 
-      - name: Validate & Apply Kubernetes Manifests
+      - name: Apply Kubernetes Manifests
         working-directory: starter/frontend/k8s
         run: |
-          kustomize build .
-          echo "Kubernetes deployment manifests validated and applied to EKS cluster."
+          REGISTRY="${{ needs.build.outputs.ecr_registry }}"
+          TAG="${{ needs.build.outputs.image_tag }}"
+
+          kustomize edit set image frontend="$REGISTRY/$ECR_REPOSITORY:$TAG"
+          kustomize build | kubectl apply -f -
+
+      - name: Verify Frontend Deployment
+        run: |
+          kubectl rollout status deployment/frontend --timeout=180s
+          kubectl get deployment frontend
+          kubectl get pods -l app=frontend
+
+      - name: Verify Frontend Service
+        run: |
+          kubectl get service frontend
+
+      - name: Show Frontend LoadBalancer Endpoint
+        run: |
+          echo "Waiting for AWS LoadBalancer endpoint..."
+
+          for i in {1..30}; do
+            ENDPOINT=$(kubectl get service frontend -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+
+            if [ -n "$ENDPOINT" ]; then
+              echo "Frontend LoadBalancer URL: http://$ENDPOINT"
+              exit 0
+            fi
+
+            echo "LoadBalancer endpoint is not ready yet. Attempt $i/30"
+            sleep 10
+          done
+
+          echo "ERROR: Frontend LoadBalancer endpoint was not assigned."
+          kubectl describe service frontend
+          exit 1
